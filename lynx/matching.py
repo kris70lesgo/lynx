@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 _DEFAULT_LOCAL = re.compile(r"^v\d+$", re.IGNORECASE)
@@ -17,6 +17,12 @@ class LocalVariable:
     defea: int
     width: int
     user_named: bool = False
+    # Optional opaque IDA identity. The matcher ignores it; the UI adapter uses
+    # it to save a rename to this exact local instead of looking it up by name.
+    identity: object | None = field(default=None, compare=False, repr=False)
+    # EAs where this decompiler local appears. A rename is unsafe if its uses
+    # cross into a different source variable's debug ranges.
+    use_addresses: tuple[int, ...] = field(default=(), compare=False)
 
 
 @dataclass(frozen=True)
@@ -95,7 +101,24 @@ def find_matches(
             and live_range.name.casefold() != local.name.casefold()
         ]
         if len(candidates) == 1:
-            eligible.append((local, candidates[0]))
+            candidate = candidates[0]
+            candidate_ranges = [
+                live_range
+                for live_range in live_ranges
+                if live_range.name.casefold() == candidate.name.casefold()
+            ]
+            uses_are_covered = bool(local.use_addresses) and all(
+                any(
+                    live_range.start_ea <= ea < live_range.end_ea
+                    for live_range in candidate_ranges
+                )
+                for ea in local.use_addresses
+            )
+            if uses_are_covered:
+                eligible.append((local, candidate))
+            else:
+                # The local may span debug-info gaps or multiple source names.
+                ambiguous += 1
         elif len(candidates) > 1:
             ambiguous += 1
 

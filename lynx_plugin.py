@@ -15,6 +15,8 @@ from lynx.matching import LocalVariable, RegisterLiveRange, find_matches
 
 
 PLUGIN_NAME = "Lynx — PDB local mapper"
+
+
 def _value(obj: Any, name: str, default: Any = None) -> Any:
     """Read an IDAPython property or zero-argument method across SDK versions."""
     value = getattr(obj, name, default)
@@ -32,16 +34,45 @@ def _current_register_name(lvar: Any) -> str | None:
     if micro_reg < 0 or width <= 0:
         return None
 
-    processor_reg = ida_hexrays.mreg2reg(micro_reg, width)
+    try:
+        processor_reg = ida_hexrays.mreg2reg(micro_reg, width)
+    except Exception:
+        return None
     if processor_reg < 0:
         return None
     return ida_idp.get_reg_name(processor_reg, width) or None
+
+
+def _collect_local_use_addresses(cfunc: Any) -> dict[int, tuple[int, ...]]:
+    """Map each decompiler local index to EAs where its ctree is used."""
+    uses: dict[int, set[int]] = {}
+
+    class LocalUseVisitor(ida_hexrays.ctree_visitor_t):
+        def __init__(self) -> None:
+            super().__init__(ida_hexrays.CV_FAST)
+
+        def visit_expr(self, expression: Any) -> int:
+            if _value(expression, "op", -1) != ida_hexrays.cot_var:
+                return 0
+
+            variable_ref = _value(expression, "v")
+            local_index = int(_value(variable_ref, "idx", -1))
+            ea = int(_value(expression, "ea", ida_idaapi.BADADDR))
+            if local_index >= 0 and ea != ida_idaapi.BADADDR:
+                uses.setdefault(local_index, set()).add(ea)
+            return 0
+
+    body = _value(cfunc, "body")
+    if body is not None:
+        LocalUseVisitor().apply_to(body, None)
+    return {index: tuple(sorted(addresses)) for index, addresses in uses.items()}
 
 
 def _collect_locals(cfunc: Any) -> list[LocalVariable]:
     lvars = cfunc.get_lvars()
     count = lvars.size() if hasattr(lvars, "size") else len(lvars)
     locals_: list[LocalVariable] = []
+    use_addresses = _collect_local_use_addresses(cfunc)
 
     for index in range(count):
         lvar = lvars[index]
@@ -55,7 +86,20 @@ def _collect_locals(cfunc: Any) -> list[LocalVariable]:
         if defea == ida_idaapi.BADADDR:
             continue
         is_user_name = bool(_value(lvar, "has_user_name", False))
-        locals_.append(LocalVariable(name, register, defea, width, is_user_name))
+        locator = ida_hexrays.lvar_locator_t()
+        locator.location = _value(lvar, "location")
+        locator.defea = defea
+        locals_.append(
+            LocalVariable(
+                name,
+                register,
+                defea,
+                width,
+                is_user_name,
+                identity=locator,
+                use_addresses=use_addresses.get(index, ()),
+            )
+        )
 
     return locals_
 
@@ -130,7 +174,7 @@ def _apply_matches(func_ea: int, matches: list[Any]) -> None:
         if ida_kernwin.ask_yn(ida_kernwin.ASKBTN_YES, prompt) != ida_kernwin.ASKBTN_YES:
             continue
 
-        if ida_hexrays.rename_lvar(func_ea, match.local.name, match.debug_name):
+        if _rename_local(func_ea, match):
             renamed += 1
             ida_kernwin.msg(
                 f"[Lynx] Renamed {match.local.name} to {match.debug_name}.\n"
@@ -142,6 +186,24 @@ def _apply_matches(func_ea: int, matches: list[Any]) -> None:
             )
 
     ida_kernwin.msg(f"[Lynx] Finished. Renamed {renamed} local(s).\n")
+
+
+def _rename_local(func_ea: int, match: Any) -> bool:
+    """Persist a rename using the exact decompiler-local location."""
+    locator = match.local.identity
+    if locator is None:
+        return False
+
+    info = ida_hexrays.lvar_saved_info_t()
+    info.ll = locator
+    info.name = match.debug_name
+    return bool(
+        ida_hexrays.modify_user_lvar_info(
+            func_ea,
+            ida_hexrays.MLI_NAME,
+            info,
+        )
+    )
 
 
 class LynxPlugin(ida_idaapi.plugin_t):

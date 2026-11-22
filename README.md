@@ -4,9 +4,9 @@ Lynx helps an analyst carry an optimized PDB local-variable name from IDA's disa
 
 ## First version
 
-Lynx reads register-variable names and address ranges already stored in the IDA database. It compares each range with the defining address and register of a Hex-Rays local variable. It suggests a rename only when the local is still an automatically generated `vN` name and the match is unique. The analyst reviews the evidence and confirms each rename.
+Lynx reads register-variable names and address ranges already stored in the IDA database. It compares each range with a Hex-Rays local's defining address and register, then checks that every observed use of that local falls inside a range with the same PDB name. It suggests a rename only when the local is still an automatically generated `vN` name and the match is unique. The analyst reviews the evidence and confirms each rename.
 
-Lynx does not load or parse PDB files itself. The PDB loader must import optimized local ranges into IDA's register-variable table. Lynx also does not split or reconstruct a local that Hex-Rays did not allocate.
+Lynx does not load or parse PDB files itself. The PDB loader must import optimized local ranges into IDA's register-variable table. Lynx skips a local when observed uses cross a gap or a range with another source name; this avoids renaming one combined Hex-Rays local as if it were a single source variable. Lynx does not split or reconstruct locals, and it cannot correct inaccurate decompiler value flow.
 
 ## Requirements
 
@@ -33,11 +33,21 @@ Copy `lynx_plugin.py` and the `lynx` folder into your IDA user plugins directory
 ## Matching rules
 
 - Uses the existing Hex-Rays local's defining address and register.
-- Requires that address to be inside the PDB register-variable range.
+- Requires the definition to be inside a matching PDB register-variable range.
+- Checks every observed pseudocode use against all fragmented ranges carrying the same source name. Ranges can use different registers.
 - Normalizes common x86/x64 and ARM64 register aliases.
 - Leaves user-renamed locals, ambiguous matches, and name collisions unchanged.
+- Saves a rename against the exact decompiler-local location, even if another local has the same displayed name.
 - Never applies a rename without an explicit confirmation.
 
 ## Development status
 
-This is an early implementation. It has not yet been run inside IDA because IDA is not installed on the current Mac. The first functional check must use IDA 9.4+ with the Hex-Rays decompiler on Windows or another supported host.
+This is an early implementation. Automated tests cover the matcher and SDK-shaped test doubles; they do not replace an IDA run. It has not yet been run inside IDA because IDA is not installed on the current Mac. The first functional check must use IDA 9.4+ with the Hex-Rays decompiler on Windows or another supported host.
+
+Run the offline checks from the repository root:
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+The test doubles do not need an IDA installation or license. To run the plugin itself, IDA Free is not enough because Hex-Rays does not include the IDAPython API in Free.

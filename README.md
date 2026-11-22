@@ -16,7 +16,7 @@ Lynx does not load or parse PDB files itself. The PDB loader must import optimiz
 
 ## Install for local development
 
-Copy `lynx.py` and the `lynx` folder into your IDA user plugins directory. The plugin appears as **Lynx — PDB local mapper** under **Edit → Plugins** and can be run with `Ctrl+Shift+L`.
+Copy `lynx_plugin.py` and the `lynx` folder into your IDA user plugins directory. The plugin appears as **Lynx — PDB local mapper** under **Edit → Plugins** and can be run with `Ctrl+Shift+L`.
 
 ## Use
 

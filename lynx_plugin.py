@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
 import ida_frame
@@ -16,9 +15,6 @@ from lynx.matching import LocalVariable, RegisterLiveRange, find_matches
 
 
 PLUGIN_NAME = "Lynx — PDB local mapper"
-_active_chooser: Any = None
-
-
 def _value(obj: Any, name: str, default: Any = None) -> Any:
     """Read an IDAPython property or zero-argument method across SDK versions."""
     value = getattr(obj, name, default)

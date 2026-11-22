@@ -3,7 +3,7 @@
   "IDAMetadataDescriptorVersion": 1,
   "plugin": {
     "name": "lynx",
-    "entryPoint": "lynx.py",
+    "entryPoint": "lynx_plugin.py",
     "categories": ["decompilation"],
     "keywords": ["pdb", "debug-symbols", "local-variables", "hex-rays"],
     "description": "Review and apply PDB register-variable names to matching Hex-Rays locals.",

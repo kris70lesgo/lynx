@@ -1,0 +1,23 @@
+{
+  "$schema": "https://hcli.docs.hex-rays.com/schemas/ida-plugin.json",
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "lynx",
+    "entryPoint": "lynx.py",
+    "categories": ["decompilation"],
+    "keywords": ["pdb", "debug-symbols", "local-variables", "hex-rays"],
+    "description": "Review and apply PDB register-variable names to matching Hex-Rays locals.",
+    "idaVersions": ">=9.4",
+    "version": "0.1.0",
+    "license": "MIT",
+    "authors": [
+      {
+        "name": "Agastya Khati"
+      }
+    ],
+    "urls": {
+      "repository": "https://github.com/kris70lesgo/lynx"
+    },
+    "requiresPython": ">=3.11"
+  }
+}
